@@ -87,6 +87,18 @@ python bot.py
 /list    # 查看详细列表
 ```
 
+### 5. 配置代理（可选但推荐）
+
+创建 `proxy.txt` 文件：
+
+```
+socks5://127.0.0.1:1080
+http://127.0.0.1:7890
+socks5://user:pass@proxy.example.com:1080
+```
+
+程序会自动随机选择代理，每次登录/换绑使用不同代理。
+
 ## 🏗️ 架构
 
 ```
@@ -143,6 +155,34 @@ tg-changebind-bot/
 ### 可选配置
 
 - `DATABASE_PATH` - 数据库路径（默认：changebind.db）
+- `PROXY_FILE` - 代理文件路径（默认：proxy.txt）
+
+### 代理配置（推荐）
+
+创建 `proxy.txt` 文件，每行一个代理：
+
+```
+# 支持格式
+socks5://127.0.0.1:1080
+http://127.0.0.1:7890
+socks5://user:password@host:port
+http://user:password@host:port
+
+# 示例
+socks5://127.0.0.1:10808
+http://proxy.example.com:8080
+```
+
+**优势：**
+- 🔒 隐藏真实IP
+- 🌍 绕过地区限制
+- 🎲 每次随机选择代理
+- ⚡ 降低被封风险
+
+**如果没有代理：**
+- 程序仍可正常运行
+- 使用本地直连
+- 风控风险稍高
 
 ## 🔐 安全说明
 

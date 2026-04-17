@@ -1,0 +1,15 @@
+# 代理配置文件
+# 
+# 支持格式：
+# - http://127.0.0.1:7890
+# - socks5://127.0.0.1:1080
+# - socks5://user:pass@host:port
+# - http://user:pass@host:port
+#
+# 每行一个代理，程序会随机选择
+# 以 # 开头的行为注释
+
+# 示例（请替换为你的真实代理）
+# socks5://127.0.0.1:1080
+# http://127.0.0.1:7890
+# socks5://user:password@proxy.example.com:1080

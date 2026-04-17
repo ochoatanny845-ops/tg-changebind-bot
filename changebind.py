@@ -40,6 +40,9 @@ class ChangeBinder:
             device_model = random.choice(DEVICE_MODELS)
             print(f'  设备: {device_model}')
             
+            # 获取随机代理
+            proxy = Config.get_random_proxy()
+            
             # 创建客户端（模拟设备）
             client = TelegramClient(
                 session_file,
@@ -49,7 +52,8 @@ class ChangeBinder:
                 system_version='Android 12' if 'Samsung' in device_model or 'Xiaomi' in device_model else 'iOS 16',
                 app_version='9.5.2',
                 lang_code='zh',
-                system_lang_code='zh-CN'
+                system_lang_code='zh-CN',
+                proxy=proxy  # 添加代理
             )
             
             await client.connect()
@@ -126,12 +130,16 @@ class ChangeBinder:
         print(f'  Session: {session_file}')
         
         try:
+            # 获取随机代理
+            proxy = Config.get_random_proxy()
+            
             # 1. 连接客户端
             print(f'\n[1/5] 连接账号...')
             client = TelegramClient(
                 session_file,
                 Config.API_ID,
-                Config.API_HASH
+                Config.API_HASH,
+                proxy=proxy  # 添加代理
             )
             
             await client.connect()

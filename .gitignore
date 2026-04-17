@@ -21,6 +21,9 @@ ENV/
 *.db
 *.db-journal
 
+# 代理配置
+proxy.txt
+
 # IDE
 .vscode/
 .idea/
