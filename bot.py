@@ -344,7 +344,7 @@ class ChangeBindBot:
         
         # 清除状态
         if user_id in user_states:
-            del user_states[user_states]
+            del user_states[user_id]
         
         total = len(accounts_to_login)
         
