@@ -2,12 +2,41 @@
 TG换绑助手Bot - 主程序
 """
 import asyncio
+import re
+import os
+from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from config import Config
+from changebind import ChangeBinder
+from database import Database
 
 # 用户状态
 user_states = {}
+
+def normalize_phone(phone):
+    """规范化手机号（自动添加+号）"""
+    phone = phone.strip()
+    if not phone.startswith('+'):
+        phone = '+' + phone
+    return phone
+
+def parse_input(text):
+    """
+    解析输入格式：手机号 API网址
+    支持格式：
+    - +972555509621 https://logincode.add4533.com/?token=xxx
+    - 551191074765 https://tgapi88880.duckdns.org/verify/xxx
+    """
+    parts = text.strip().split()
+    
+    if len(parts) < 2:
+        return None, None
+    
+    phone = normalize_phone(parts[0])
+    api_url = parts[1]
+    
+    return phone, api_url
 
 class ChangeBindBot:
     """换绑助手Bot"""
@@ -15,6 +44,12 @@ class ChangeBindBot:
     def __init__(self):
         # 验证配置
         Config.validate()
+        
+        # 初始化数据库
+        self.db = Database()
+        
+        # 初始化换绑器
+        self.binder = ChangeBinder()
         
         # 创建应用
         self.app = Application.builder().token(Config.BOT_TOKEN).build()
@@ -25,6 +60,9 @@ class ChangeBindBot:
     def setup_handlers(self):
         """设置处理器"""
         self.app.add_handler(CommandHandler('start', self.cmd_start))
+        self.app.add_handler(CommandHandler('login', self.cmd_login))
+        self.app.add_handler(CommandHandler('status', self.cmd_status))
+        self.app.add_handler(CommandHandler('list', self.cmd_list))
         self.app.add_handler(CommandHandler('changebind', self.cmd_changebind))
         self.app.add_handler(CommandHandler('help', self.cmd_help))
         self.app.add_handler(CommandHandler('cancel', self.cmd_cancel))
@@ -41,11 +79,112 @@ class ChangeBindBot:
         await update.message.reply_text(
             '👋 欢迎使用TG换绑助手！\n\n'
             '📱 功能：\n'
-            '/changebind - 更换账号手机号\n'
+            '/login - 登录账号到新设备（开始24小时等待）\n'
+            '/status - 查看账号状态\n'
+            '/list - 列出所有账号\n'
+            '/changebind - 执行换绑\n'
             '/help - 查看帮助\n'
             '/cancel - 取消当前操作\n\n'
-            '💡 提示：支持单个和批量换绑'
+            '💡 使用流程：\n'
+            '1️⃣ /login 登录账号\n'
+            '2️⃣ 等待24小时\n'
+            '3️⃣ /changebind 换绑到新手机号'
         )
+    
+    async def cmd_login(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """登录命令"""
+        user_id = update.effective_user.id
+        
+        if user_id != Config.ADMIN_ID:
+            await update.message.reply_text('❌ 无权限')
+            return
+        
+        user_states[user_id] = {'step': 'waiting_login_info'}
+        
+        await update.message.reply_text(
+            '📱 请输入账号信息\n\n'
+            '格式：\n'
+            '手机号 API网址\n\n'
+            '示例：\n'
+            '+972555509621 https://logincode.add4533.com/?token=xxx\n'
+            '551191074765 https://tgapi88880.duckdns.org/verify/xxx\n\n'
+            '💡 如果手机号没有+号，会自动添加\n\n'
+            '发送 /cancel 取消'
+        )
+    
+    async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """查看状态"""
+        user_id = update.effective_user.id
+        
+        if user_id != Config.ADMIN_ID:
+            await update.message.reply_text('❌ 无权限')
+            return
+        
+        accounts = self.db.get_all_accounts()
+        
+        if not accounts:
+            await update.message.reply_text('📋 暂无账号')
+            return
+        
+        # 统计
+        pending = sum(1 for a in accounts if a['status'] == 'pending')
+        ready = sum(1 for a in accounts if a['status'] == 'ready')
+        completed = sum(1 for a in accounts if a['status'] == 'completed')
+        failed = sum(1 for a in accounts if a['status'] == 'failed')
+        
+        text = (
+            f'📊 账号状态统计\n\n'
+            f'⏳ 等待中: {pending}\n'
+            f'✅ 就绪: {ready}\n'
+            f'🎉 已完成: {completed}\n'
+            f'❌ 失败: {failed}\n'
+            f'➖➖➖➖➖➖➖➖➖\n'
+            f'📱 总计: {len(accounts)}\n\n'
+            f'使用 /list 查看详细列表'
+        )
+        
+        await update.message.reply_text(text)
+    
+    async def cmd_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """列出所有账号"""
+        user_id = update.effective_user.id
+        
+        if user_id != Config.ADMIN_ID:
+            await update.message.reply_text('❌ 无权限')
+            return
+        
+        accounts = self.db.get_all_accounts()
+        
+        if not accounts:
+            await update.message.reply_text('📋 暂无账号')
+            return
+        
+        text = '📋 账号列表\n\n'
+        
+        for acc in accounts:
+            status_emoji = {
+                'pending': '⏳',
+                'ready': '✅',
+                'completed': '🎉',
+                'failed': '❌'
+            }.get(acc['status'], '❓')
+            
+            text += f'{status_emoji} #{acc["id"]} {acc["old_phone"]}\n'
+            text += f'   状态: {acc["status"]}\n'
+            
+            if acc['status'] == 'pending':
+                ready_dt = datetime.fromtimestamp(acc['ready_time'])
+                text += f'   就绪时间: {ready_dt.strftime("%m-%d %H:%M")}\n'
+            
+            if acc['status'] == 'completed':
+                text += f'   新手机号: {acc["new_phone"]}\n'
+            
+            if acc['error_message']:
+                text += f'   错误: {acc["error_message"]}\n'
+            
+            text += '\n'
+        
+        await update.message.reply_text(text)
     
     async def cmd_changebind(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """换绑命令"""
@@ -55,14 +194,15 @@ class ChangeBindBot:
             await update.message.reply_text('❌ 无权限')
             return
         
-        user_states[user_id] = {'step': 'waiting_account'}
+        user_states[user_id] = {'step': 'waiting_changebind_id'}
         
         await update.message.reply_text(
-            '📱 请输入账号信息\n\n'
+            '🔄 请输入账号ID和新手机号信息\n\n'
             '格式：\n'
-            '旧手机号 新手机号 API链接\n\n'
+            '账号ID 新手机号 API网址\n\n'
             '示例：\n'
-            '+8613800138000 +8613900139000 https://api.example.com/xxx\n\n'
+            '1 +8613900139000 https://logincode.add4533.com/?token=xxx\n\n'
+            '💡 使用 /list 查看账号ID\n\n'
             '发送 /cancel 取消'
         )
     
@@ -70,10 +210,17 @@ class ChangeBindBot:
         """帮助命令"""
         await update.message.reply_text(
             '📖 使用帮助\n\n'
-            '1️⃣ 发送 /changebind 开始换绑\n'
-            '2️⃣ 输入：旧手机号 新手机号 API链接\n'
-            '3️⃣ 等待自动完成\n\n'
-            '💡 API链接用于自动获取验证码'
+            '1️⃣ 登录账号\n'
+            '/login\n'
+            '输入：手机号 API网址\n\n'
+            '2️⃣ 等待24小时\n'
+            '使用 /status 查看就绪状态\n\n'
+            '3️⃣ 执行换绑\n'
+            '/changebind\n'
+            '输入：账号ID 新手机号 API网址\n\n'
+            '💡 格式示例：\n'
+            '+972555509621 https://logincode.add4533.com/?token=xxx\n'
+            '551191074765 https://tgapi88880.duckdns.org/verify/xxx'
         )
     
     async def cmd_cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -99,25 +246,160 @@ class ChangeBindBot:
         state = user_states[user_id]
         step = state.get('step')
         
-        if step == 'waiting_account':
-            await self.handle_account_input(update, state)
+        if step == 'waiting_login_info':
+            await self.handle_login_input(update)
+        elif step == 'waiting_changebind_id':
+            await self.handle_changebind_input(update)
     
-    async def handle_account_input(self, update: Update, state):
-        """处理账号输入"""
+    async def handle_login_input(self, update: Update):
+        """处理登录输入"""
         text = update.message.text.strip()
+        user_id = update.effective_user.id
         
-        # TODO: 解析账号信息
-        # TODO: 调用换绑逻辑
+        # 解析输入
+        phone, api_url = parse_input(text)
         
-        await update.message.reply_text(
-            '⚠️ 功能开发中...\n\n'
-            f'收到输入：{text}'
-        )
+        if not phone or not api_url:
+            await update.message.reply_text(
+                '❌ 格式错误\n\n'
+                '正确格式：\n'
+                '手机号 API网址'
+            )
+            return
         
         # 清除状态
-        user_id = update.effective_user.id
         if user_id in user_states:
             del user_states[user_id]
+        
+        await update.message.reply_text(
+            f'⏳ 开始登录...\n\n'
+            f'手机号: {phone}\n'
+            f'API: {api_url}\n\n'
+            f'请稍候...'
+        )
+        
+        # 生成session文件名
+        session_file = f'sessions/login_{phone.replace("+", "")}'
+        os.makedirs('sessions', exist_ok=True)
+        
+        # 执行登录
+        result = await self.binder.login_account(phone, api_url, session_file)
+        
+        if result['success']:
+            # 添加到数据库
+            account_id = self.db.add_account(
+                phone,
+                api_url,
+                session_file,
+                result['device_model']
+            )
+            
+            ready_time = datetime.now() + timedelta(hours=24)
+            
+            await update.message.reply_text(
+                f'✅ 登录成功！\n\n'
+                f'账号ID: #{account_id}\n'
+                f'手机号: {phone}\n'
+                f'设备: {result["device_model"]}\n\n'
+                f'⏰ 就绪时间: {ready_time.strftime("%m-%d %H:%M")}\n'
+                f'（24小时后可换绑）\n\n'
+                f'使用 /status 查看状态'
+            )
+        else:
+            await update.message.reply_text(
+                f'❌ 登录失败\n\n'
+                f'错误: {result["error"]}'
+            )
+    
+    async def handle_changebind_input(self, update: Update):
+        """处理换绑输入"""
+        text = update.message.text.strip()
+        user_id = update.effective_user.id
+        
+        # 解析：账号ID 新手机号 API网址
+        parts = text.split()
+        
+        if len(parts) < 3:
+            await update.message.reply_text(
+                '❌ 格式错误\n\n'
+                '正确格式：\n'
+                '账号ID 新手机号 API网址'
+            )
+            return
+        
+        try:
+            account_id = int(parts[0])
+            new_phone = normalize_phone(parts[1])
+            api_url = parts[2]
+        except ValueError:
+            await update.message.reply_text('❌ 账号ID必须是数字')
+            return
+        
+        # 清除状态
+        if user_id in user_states:
+            del user_states[user_id]
+        
+        # 获取账号信息
+        account = self.db.get_account(account_id)
+        
+        if not account:
+            await update.message.reply_text(f'❌ 账号ID #{account_id} 不存在')
+            return
+        
+        if account['status'] != 'pending':
+            await update.message.reply_text(
+                f'❌ 账号状态错误\n\n'
+                f'当前状态: {account["status"]}\n'
+                f'只有 pending 状态的账号可以换绑'
+            )
+            return
+        
+        # 检查是否就绪
+        import time
+        now = int(time.time())
+        if now < account['ready_time']:
+            ready_dt = datetime.fromtimestamp(account['ready_time'])
+            await update.message.reply_text(
+                f'❌ 账号尚未就绪\n\n'
+                f'就绪时间: {ready_dt.strftime("%m-%d %H:%M")}\n'
+                f'还需等待: {(account["ready_time"] - now) // 3600} 小时'
+            )
+            return
+        
+        await update.message.reply_text(
+            f'⏳ 开始换绑...\n\n'
+            f'账号: {account["old_phone"]}\n'
+            f'新手机号: {new_phone}\n'
+            f'API: {api_url}\n\n'
+            f'请稍候...'
+        )
+        
+        # 执行换绑
+        result = await self.binder.change_phone(
+            account['session_file'],
+            new_phone,
+            api_url
+        )
+        
+        if result['success']:
+            # 更新数据库
+            self.db.update_changebind(account_id, new_phone, api_url)
+            
+            await update.message.reply_text(
+                f'✅ 换绑成功！\n\n'
+                f'账号ID: #{account_id}\n'
+                f'旧手机号: {result["old_phone"]}\n'
+                f'新手机号: {result["new_phone"]}\n\n'
+                f'🎉 换绑完成！'
+            )
+        else:
+            # 更新失败状态
+            self.db.update_status(account_id, 'failed', result['error'])
+            
+            await update.message.reply_text(
+                f'❌ 换绑失败\n\n'
+                f'错误: {result["error"]}'
+            )
     
     async def start(self):
         """启动Bot"""
