@@ -202,10 +202,14 @@ class Config:
         格式2（简化）: host:port:user:pass
         """
         # 尝试格式2：host:port:user:pass
+        # 示例：gate.ipdeep.com:8082:d1561533000-res-country-in-session-xxx:Qqesi3rN
         if '://' not in proxy_string:
-            parts = proxy_string.split(':')
+            parts = proxy_string.split(':', 3)  # 限制分割为4部分（host:port:user:pass）
             if len(parts) == 4:
                 host, port, username, password = parts
+                
+                print(f'  🔧 代理解析: host={host}, port={port}, user={username[:20]}..., pass={password}')
+                
                 return {
                     'proxy_type': 'socks5',  # 默认使用socks5
                     'addr': host,
@@ -213,6 +217,9 @@ class Config:
                     'username': username,
                     'password': password
                 }
+            else:
+                print(f'  ⚠️ 代理格式错误（应为host:port:user:pass）: {proxy_string}')
+                return None
         
         # 格式1：使用URL解析
         return cls._parse_proxy_url(f'socks5://{proxy_string}' if '://' not in proxy_string else proxy_string)
