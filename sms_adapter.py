@@ -40,7 +40,58 @@ class SMSAdapter:
             return await self._get_code_custom(timeout)
     
     async def _get_code_logincode(self, timeout):
-        """logincode.add4533.com 平台"""
+        """logincode.add4533.com 平台（API方式）"""
+        # 从URL提取token
+        # 格式: https://logincode.add4533.com/?token=39822457-96cd-4d9c-af62-4576b7dd7d5f
+        import re
+        match = re.search(r'[?&]token=([^&]+)', self.api_url)
+        
+        if not match:
+            print(f'  ⚠️ 无法从URL提取token: {self.api_url}')
+            return None
+        
+        token = match.group(1)
+        
+        # API endpoint（猜测，根据常见模式）
+        api_url = f'https://logincode.add4533.com/api/code?token={token}'
+        
+        print(f'  🔍 尝试API查询: {api_url}')
+        
+        start_time = asyncio.get_event_loop().time()
+        
+        async with aiohttp.ClientSession() as session:
+            while asyncio.get_event_loop().time() - start_time < timeout:
+                try:
+                    async with session.get(api_url) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            
+                            # 尝试多种可能的字段名
+                            code = data.get('code') or data.get('verifyCode') or data.get('sms')
+                            
+                            if code:
+                                print(f'  ✅ 获取到验证码: {code}')
+                                return str(code)
+                        
+                        # 如果API不存在，回退到HTML解析
+                        if resp.status == 404:
+                            print(f'  ⚠️ API不存在，回退到HTML解析')
+                            return await self._get_code_logincode_html(timeout)
+                        
+                        await asyncio.sleep(5)
+                        
+                except aiohttp.ClientError as e:
+                    print(f'  ⚠️ API查询失败，尝试HTML解析: {e}')
+                    return await self._get_code_logincode_html(timeout)
+                except Exception as e:
+                    print(f'  ⚠️ 查询失败: {e}')
+                    await asyncio.sleep(5)
+        
+        print(f'  ❌ 超时未获取到验证码')
+        return None
+    
+    async def _get_code_logincode_html(self, timeout):
+        """logincode HTML解析（备用）"""
         start_time = asyncio.get_event_loop().time()
         
         async with aiohttp.ClientSession() as session:
@@ -49,26 +100,24 @@ class SMSAdapter:
                     async with session.get(self.api_url) as resp:
                         html = await resp.text()
                         
-                        # 解析HTML，查找验证码
-                        soup = BeautifulSoup(html, 'html.parser')
+                        # 尝试从HTML中提取（可能在<script>标签中）
+                        import re
                         
-                        # 尝试多种可能的选择器
-                        code = None
+                        # 匹配JavaScript中的验证码变量
+                        patterns = [
+                            r'verifyCode["\']?\s*[:=]\s*["\']?(\d{5,6})',
+                            r'code["\']?\s*[:=]\s*["\']?(\d{5,6})',
+                            r'sms["\']?\s*[:=]\s*["\']?(\d{5,6})',
+                            r'"code":\s*"?(\d{5,6})"?',
+                        ]
                         
-                        # 方式1: 查找包含数字的元素
-                        for elem in soup.find_all(['div', 'span', 'p', 'h1', 'h2', 'h3']):
-                            text = elem.get_text().strip()
-                            # 匹配5-6位数字
-                            match = re.search(r'\b(\d{5,6})\b', text)
+                        for pattern in patterns:
+                            match = re.search(pattern, html, re.IGNORECASE)
                             if match:
                                 code = match.group(1)
-                                break
+                                print(f'  ✅ 获取到验证码: {code}')
+                                return code
                         
-                        if code:
-                            print(f'  ✅ 获取到验证码: {code}')
-                            return code
-                        
-                        # 等待5秒后重试
                         await asyncio.sleep(5)
                         
                 except Exception as e:
