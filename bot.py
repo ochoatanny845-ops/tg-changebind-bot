@@ -67,6 +67,7 @@ class ChangeBindBot:
         self.app.add_handler(CommandHandler('help', self.cmd_help))
         self.app.add_handler(CommandHandler('cancel', self.cmd_cancel))
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        self.app.add_handler(MessageHandler(filters.Document.ALL, self.handle_document))  # 文件处理
     
     async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """启动命令"""
@@ -103,11 +104,13 @@ class ChangeBindBot:
         
         await update.message.reply_text(
             '📱 请输入账号信息\n\n'
-            '格式：\n'
+            '单个账号：\n'
             '手机号 API网址\n\n'
-            '示例：\n'
+            '批量登录（每行一个）：\n'
             '+972555509621 https://logincode.add4533.com/?token=xxx\n'
-            '551191074765 https://tgapi88880.duckdns.org/verify/xxx\n\n'
+            '+55119107476 https://tgapi88880.duckdns.org/verify/yyy\n'
+            '+8613800138000 https://logincode.add4533.com/?token=zzz\n\n'
+            '或发送 TXT 文件（每行一个账号）\n\n'
             '💡 如果手机号没有+号，会自动添加\n\n'
             '发送 /cancel 取消'
         )
@@ -251,26 +254,109 @@ class ChangeBindBot:
         elif step == 'waiting_changebind_id':
             await self.handle_changebind_input(update)
     
+    async def handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """处理文件上传（TXT批量导入）"""
+        user_id = update.effective_user.id
+        
+        if user_id != Config.ADMIN_ID:
+            return
+        
+        if user_id not in user_states:
+            return
+        
+        state = user_states[user_id]
+        step = state.get('step')
+        
+        if step != 'waiting_login_info':
+            return
+        
+        # 下载文件
+        file = await update.message.document.get_file()
+        file_path = f'temp_{user_id}.txt'
+        
+        await file.download_to_drive(file_path)
+        
+        # 读取文件内容
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                text = f.read()
+            
+            # 删除临时文件
+            os.remove(file_path)
+            
+            # 处理内容（复用handle_login_input的逻辑）
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            
+            if len(lines) == 0:
+                await update.message.reply_text('❌ 文件为空')
+                return
+            
+            # 解析所有账号
+            accounts_to_login = []
+            for line in lines:
+                phone, api_url = parse_input(line)
+                if phone and api_url:
+                    accounts_to_login.append((phone, api_url))
+                else:
+                    await update.message.reply_text(
+                        f'❌ 格式错误（第{len(accounts_to_login)+1}行）：\n{line}\n\n'
+                        f'正确格式：\n手机号 API网址'
+                    )
+                    return
+            
+            # 清除状态
+            if user_id in user_states:
+                del user_states[user_id]
+            
+            # 批量登录
+            await self._login_batch(update, accounts_to_login)
+            
+        except Exception as e:
+            await update.message.reply_text(f'❌ 文件处理失败: {e}')
+            if os.path.exists(file_path):
+                os.remove(file_path)
+    
+    
     async def handle_login_input(self, update: Update):
-        """处理登录输入"""
+        """处理登录输入（支持批量）"""
         text = update.message.text.strip()
         user_id = update.effective_user.id
         
-        # 解析输入
-        phone, api_url = parse_input(text)
+        # 检测是否为批量（多行）
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
         
-        if not phone or not api_url:
-            await update.message.reply_text(
-                '❌ 格式错误\n\n'
-                '正确格式：\n'
-                '手机号 API网址'
-            )
+        if len(lines) == 0:
+            await update.message.reply_text('❌ 输入为空')
             return
+        
+        # 解析所有账号
+        accounts_to_login = []
+        for line in lines:
+            phone, api_url = parse_input(line)
+            if phone and api_url:
+                accounts_to_login.append((phone, api_url))
+            else:
+                await update.message.reply_text(
+                    f'❌ 格式错误（第{len(accounts_to_login)+1}行）：\n{line}\n\n'
+                    f'正确格式：\n手机号 API网址'
+                )
+                return
         
         # 清除状态
         if user_id in user_states:
-            del user_states[user_id]
+            del user_states[user_states]
         
+        total = len(accounts_to_login)
+        
+        if total == 1:
+            # 单个登录
+            await self._login_single(update, accounts_to_login[0][0], accounts_to_login[0][1])
+        else:
+            # 批量登录
+            await self._login_batch(update, accounts_to_login)
+    
+    async def _login_single(self, update: Update, phone: str, api_url: str):
+        """单个登录"""
         await update.message.reply_text(
             f'⏳ 开始登录...\n\n'
             f'手机号: {phone}\n'
@@ -310,6 +396,60 @@ class ChangeBindBot:
                 f'❌ 登录失败\n\n'
                 f'错误: {result["error"]}'
             )
+    
+    async def _login_batch(self, update: Update, accounts: list):
+        """批量登录"""
+        total = len(accounts)
+        
+        await update.message.reply_text(
+            f'📦 批量登录模式\n\n'
+            f'总数: {total} 个账号\n'
+            f'开始处理...'
+        )
+        
+        success_count = 0
+        failed_count = 0
+        results_text = ''
+        
+        for idx, (phone, api_url) in enumerate(accounts, 1):
+            # 发送进度
+            if idx % 5 == 1 or idx == total:
+                await update.message.reply_text(f'⏳ 进度: {idx}/{total}')
+            
+            # 生成session文件名
+            session_file = f'sessions/login_{phone.replace("+", "")}'
+            os.makedirs('sessions', exist_ok=True)
+            
+            # 执行登录
+            result = await self.binder.login_account(phone, api_url, session_file)
+            
+            if result['success']:
+                # 添加到数据库
+                account_id = self.db.add_account(
+                    phone,
+                    api_url,
+                    session_file,
+                    result['device_model']
+                )
+                
+                success_count += 1
+                results_text += f'✅ #{account_id} {phone}\n'
+            else:
+                failed_count += 1
+                results_text += f'❌ {phone} - {result["error"]}\n'
+        
+        # 发送汇总
+        ready_time = datetime.now() + timedelta(hours=24)
+        
+        await update.message.reply_text(
+            f'📊 批量登录完成！\n\n'
+            f'成功: {success_count}\n'
+            f'失败: {failed_count}\n'
+            f'总计: {total}\n\n'
+            f'⏰ 就绪时间: {ready_time.strftime("%m-%d %H:%M")}\n\n'
+            f'{results_text}\n'
+            f'使用 /status 查看详情'
+        )
     
     async def handle_changebind_input(self, update: Update):
         """处理换绑输入"""

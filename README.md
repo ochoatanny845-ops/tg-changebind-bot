@@ -30,6 +30,8 @@ cp .env.example .env
 必需配置：
 - `BOT_TOKEN` - Telegram Bot Token（从@BotFather获取）
 - `API_ID` - Telegram API ID（从 https://my.telegram.org 获取）
+  - **推荐使用 Android 官方**: `API_ID=6`, `API_HASH=eb06d4abfb49dc3eeb1aeb98ae0f581e`
+  - iOS 官方: `API_ID=1`（不推荐，API_HASH不公开）
 - `API_HASH` - Telegram API Hash
 - `ADMIN_ID` - 管理员Telegram ID
 
@@ -47,15 +49,21 @@ python bot.py
 /login
 ```
 
-输入格式：
-```
-手机号 API网址
-```
-
-示例：
+**单个账号：**
 ```
 +972555509621 https://logincode.add4533.com/?token=xxx
-551191074765 https://tgapi88880.duckdns.org/verify/xxx
+```
+
+**批量登录（每行一个）：**
+```
++972555509621 https://logincode.add4533.com/?token=xxx
++55119107476 https://tgapi88880.duckdns.org/verify/yyy
++8613800138000 https://logincode.add4533.com/?token=zzz
+```
+
+**或上传TXT文件：**
+```
+每行一个账号，格式同上
 ```
 
 💡 如果手机号没有+号，会自动添加
