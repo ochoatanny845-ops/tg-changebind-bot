@@ -79,39 +79,54 @@ class SMSAdapter:
         return None
     
     async def _get_code_tgapi(self, timeout):
-        """tgapi88880.duckdns.org 平台"""
+        """tgapi88880.duckdns.org 平台（SSE实时推送）"""
+        # 从verify URL提取API key
+        # 格式: https://tgapi88880.duckdns.org/verify/09990aadf5b37c05e373ce2300aa378f
+        api_key = self.api_url.split('/verify/')[-1]
+        
+        # SSE stream URL
+        sse_url = f"https://tgapi88880.duckdns.org/api/stream/{api_key}"
+        
+        print(f'  📡 连接SSE stream: {sse_url}')
+        
         start_time = asyncio.get_event_loop().time()
         
         async with aiohttp.ClientSession() as session:
-            while asyncio.get_event_loop().time() - start_time < timeout:
-                try:
-                    async with session.get(self.api_url) as resp:
-                        html = await resp.text()
+            try:
+                async with session.get(sse_url, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+                    async for line in resp.content:
+                        # 检查超时
+                        if asyncio.get_event_loop().time() - start_time > timeout:
+                            print(f'  ❌ 超时未获取到验证码')
+                            return None
                         
-                        # 解析HTML
-                        soup = BeautifulSoup(html, 'html.parser')
+                        # 解析SSE数据
+                        line_str = line.decode('utf-8').strip()
                         
-                        # 查找验证码
-                        code = None
+                        # SSE格式: data: {"code":"9689","time":"2026-04-18 00:52:43"}
+                        if line_str.startswith('data:'):
+                            data_json = line_str[5:].strip()
+                            
+                            try:
+                                import json
+                                data = json.loads(data_json)
+                                
+                                if 'code' in data and data['code']:
+                                    code = str(data['code']).strip()
+                                    print(f'  ✅ 获取到验证码: {code}')
+                                    return code
+                                    
+                            except json.JSONDecodeError:
+                                continue
                         
-                        for elem in soup.find_all(['div', 'span', 'p', 'h1', 'h2', 'h3']):
-                            text = elem.get_text().strip()
-                            match = re.search(r'\b(\d{5,6})\b', text)
-                            if match:
-                                code = match.group(1)
-                                break
-                        
-                        if code:
-                            print(f'  ✅ 获取到验证码: {code}')
-                            return code
-                        
-                        await asyncio.sleep(5)
-                        
-                except Exception as e:
-                    print(f'  ⚠️ 查询失败: {e}')
-                    await asyncio.sleep(5)
+            except asyncio.TimeoutError:
+                print(f'  ❌ SSE连接超时')
+                return None
+            except Exception as e:
+                print(f'  ⚠️ SSE连接失败: {e}')
+                return None
         
-        print(f'  ❌ 超时未获取到验证码')
+        print(f'  ❌ 未获取到验证码')
         return None
     
     async def _get_code_custom(self, timeout):
