@@ -87,35 +87,48 @@ python bot.py
 /list    # 查看详细列表
 ```
 
-### 5. 配置代理（推荐 - 按国家自动匹配）
+### 5. 配置代理（推荐 - 动态生成国家代理）
 
-创建 `proxy.txt` 文件，格式：`国家代码|代理URL`
+**新格式（推荐）：代理模板**
+
+创建 `proxy.txt` 文件：
 
 ```
-# 全局代理（备用）
-global|socks5://127.0.0.1:10808
-global|http://127.0.0.1:7890
+# 格式：host:port:username_template:password
+# 使用 {country} 占位符，自动替换为国家代码
+# 使用 {session} 占位符，自动生成会话ID
 
-# 以色列 (+972)
-972|socks5://il-proxy.example.com:1080
-
-# 巴西 (+55)
-55|socks5://br-proxy.example.com:1080
-
-# 中国 (+86)
-86|socks5://cn-proxy.example.com:1080
-
-# 美国/加拿大 (+1)
-1|socks5://us-proxy.example.com:1080
+gate.ipdeep.com:8082:d1561533000-res-country-{country}-session-{session}:Qqesi3rN
 ```
 
-**自动匹配规则：**
-- 登录 `+972555509621` → 自动使用以色列代理
-- 登录 `+8613800138000` → 自动使用中国代理
-- 没有匹配时 → 使用 `global` 代理
+**自动生成规则：**
+```
+登录 +972555509621 (以色列)
+→ 生成: gate.ipdeep.com:8082:d1561533000-res-country-il-session-1713368400000:Qqesi3rN
 
-**旧格式兼容：**
-如果不加国家代码，直接写代理URL，会当作全局代理使用。
+登录 +55119107476 (巴西)
+→ 生成: gate.ipdeep.com:8082:d1561533000-res-country-br-session-1713368401000:Qqesi3rN
+
+登录 +8613800138000 (中国)
+→ 生成: gate.ipdeep.com:8082:d1561533000-res-country-cn-session-1713368402000:Qqesi3rN
+```
+
+**国家代码映射：**
+- +972 → il (以色列)
+- +55 → br (巴西)
+- +86 → cn (中国)
+- +1 → us (美国)
+- +7 → ru (俄罗斯)
+- +91 → in (印度)
+- [查看完整列表](country_codes.py)
+
+**优势：**
+- 🌍 **自动匹配手机号所属国家**
+- 🔄 **每次生成唯一会话ID**
+- 🎯 **符合地理位置一致性（降低风控）**
+- 📍 **无需为每个国家单独配置代理**
+
+
 
 ## 🏗️ 架构
 

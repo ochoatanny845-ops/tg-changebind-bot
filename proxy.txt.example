@@ -1,63 +1,19 @@
-# 代理配置文件（按国家分类）
+# 代理配置文件（模板格式）
 #
-# 格式：国家代码|代理URL
-# 国家代码使用手机号国际区号（去掉+号）
+# 格式：host:port:username_template:password
+#
+# username_template 中使用 {country} 占位符，会自动替换为国家代码
 #
 # 示例：
-# 972|socks5://il-proxy.example.com:1080    # 以色列
-# 55|socks5://br-proxy.example.com:1080     # 巴西
-# 86|socks5://cn-proxy.example.com:1080     # 中国
-# 1|socks5://us-proxy.example.com:1080      # 美国/加拿大
+# gate.ipdeep.com:8082:d1561533000-res-country-{country}-session-{session}:Qqesi3rN
 #
-# 可以为同一个国家配置多个代理（会随机选择）
-# 如果没有匹配的国家代理，会使用全局代理（标记为global）
+# 手机号 +55119107476 (巴西) → res-country-br
+# 手机号 +972555509621 (以色列) → res-country-il
+# 手机号 +8613800138000 (中国) → res-country-cn
 
-# 全局代理（备用，当找不到对应国家代理时使用）
-global|socks5://127.0.0.1:10808
-global|http://127.0.0.1:7890
+# IPDeep 代理（支持多国家）
+gate.ipdeep.com:8082:d1561533000-res-country-{country}-session-{session}:Qqesi3rN
 
-# 以色列 (+972)
-# 972|socks5://il-proxy1.example.com:1080
-# 972|socks5://il-proxy2.example.com:1080
-
-# 巴西 (+55)
-# 55|socks5://br-proxy.example.com:1080
-
-# 中国 (+86)
-# 86|socks5://cn-proxy.example.com:1080
-
-# 美国/加拿大 (+1)
-# 1|socks5://us-proxy.example.com:1080
-
-# 俄罗斯 (+7)
-# 7|socks5://ru-proxy.example.com:1080
-
-# 印度 (+91)
-# 91|socks5://in-proxy.example.com:1080
-
-# 英国 (+44)
-# 44|socks5://uk-proxy.example.com:1080
-
-# 德国 (+49)
-# 49|socks5://de-proxy.example.com:1080
-
-# 法国 (+33)
-# 33|socks5://fr-proxy.example.com:1080
-
-# 日本 (+81)
-# 81|socks5://jp-proxy.example.com:1080
-
-# 韩国 (+82)
-# 82|socks5://kr-proxy.example.com:1080
-
-# 新加坡 (+65)
-# 65|socks5://sg-proxy.example.com:1080
-
-# 澳大利亚 (+61)
-# 61|socks5://au-proxy.example.com:1080
-
-# 土耳其 (+90)
-# 90|socks5://tr-proxy.example.com:1080
-
-# 阿联酋 (+971)
-# 971|socks5://ae-proxy.example.com:1080
+# 可以配置多个模板（会随机选择）
+# gate.ipdeep.com:8082:d1561533000-res-country-{country}-session-{session}:Qqesi3rN
+# other-proxy.com:1080:user-{country}-session-{session}:pass123

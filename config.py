@@ -3,7 +3,9 @@
 """
 import os
 import random
+import time
 from dotenv import load_dotenv
+from country_codes import get_country_code
 
 # 加载环境变量
 load_dotenv()
@@ -43,7 +45,7 @@ class Config:
     @classmethod
     def get_proxy_for_phone(cls, phone):
         """
-        根据手机号选择对应国家的代理
+        根据手机号生成对应国家的代理
         
         参数：
         - phone: 手机号（格式：+972555509621）
@@ -56,15 +58,22 @@ class Config:
             return None
         
         # 提取国家代码（手机号前缀）
-        country_code = cls._extract_country_code(phone)
+        phone_country_code = cls._extract_country_code(phone)
         
-        if not country_code:
+        if not phone_country_code:
             print(f'  ⚠️ 无法识别手机号国家: {phone}')
             return None
         
-        print(f'  🌍 手机号国家代码: +{country_code}')
+        # 转换为ISO国家代码
+        country_iso = get_country_code(phone_country_code)
         
-        # 读取代理配置
+        if not country_iso:
+            print(f'  ⚠️ 未找到国家代码 +{phone_country_code} 的映射')
+            return None
+        
+        print(f'  🌍 手机号: +{phone_country_code} → 国家: {country_iso.upper()}')
+        
+        # 读取代理模板
         with open(cls.PROXY_FILE, 'r', encoding='utf-8') as f:
             lines = [line.strip() for line in f if line.strip() and not line.startswith('#')]
         
@@ -72,41 +81,19 @@ class Config:
             print(f'  ⚠️ 代理文件为空')
             return None
         
-        # 解析代理（按国家分组）
-        proxies_by_country = {}
-        global_proxies = []
+        # 随机选择一个代理模板
+        proxy_template = random.choice(lines)
         
-        for line in lines:
-            if '|' not in line:
-                # 旧格式兼容（没有国家标识，当作全局代理）
-                global_proxies.append(line)
-                continue
-            
-            country, proxy_url = line.split('|', 1)
-            country = country.strip()
-            proxy_url = proxy_url.strip()
-            
-            if country == 'global':
-                global_proxies.append(proxy_url)
-            else:
-                if country not in proxies_by_country:
-                    proxies_by_country[country] = []
-                proxies_by_country[country].append(proxy_url)
+        # 生成会话ID（时间戳）
+        session_id = int(time.time() * 1000)
         
-        # 优先使用对应国家的代理
-        if country_code in proxies_by_country:
-            proxy_list = proxies_by_country[country_code]
-            print(f'  ✅ 找到 {len(proxy_list)} 个 +{country_code} 代理')
-            proxy_url = random.choice(proxy_list)
-        elif global_proxies:
-            print(f'  ⚠️ 未找到 +{country_code} 代理，使用全局代理')
-            proxy_url = random.choice(global_proxies)
-        else:
-            print(f'  ❌ 没有可用的代理')
-            return None
+        # 替换模板变量
+        proxy_string = proxy_template.replace('{country}', country_iso).replace('{session}', str(session_id))
         
-        # 解析代理URL
-        return cls._parse_proxy_url(proxy_url)
+        print(f'  🔒 生成代理: {proxy_string}')
+        
+        # 解析代理字符串
+        return cls._parse_proxy_string(proxy_string)
     
     @classmethod
     def _extract_country_code(cls, phone):
@@ -197,6 +184,30 @@ class Config:
         
         # 解析代理URL
         return cls._parse_proxy_url(proxy_url)
+    
+    @classmethod
+    def _parse_proxy_string(cls, proxy_string):
+        """
+        解析代理字符串（支持多种格式）
+        
+        格式1（URL）: socks5://user:pass@host:port
+        格式2（简化）: host:port:user:pass
+        """
+        # 尝试格式2：host:port:user:pass
+        if '://' not in proxy_string:
+            parts = proxy_string.split(':')
+            if len(parts) == 4:
+                host, port, username, password = parts
+                return {
+                    'proxy_type': 'socks5',  # 默认使用socks5
+                    'addr': host,
+                    'port': int(port),
+                    'username': username,
+                    'password': password
+                }
+        
+        # 格式1：使用URL解析
+        return cls._parse_proxy_url(f'socks5://{proxy_string}' if '://' not in proxy_string else proxy_string)
     
     @classmethod
     def _parse_proxy_url(cls, proxy_url):
