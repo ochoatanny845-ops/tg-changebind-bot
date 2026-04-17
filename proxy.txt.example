@@ -1,15 +1,63 @@
-# 代理配置文件
-# 
-# 支持格式：
-# - http://127.0.0.1:7890
-# - socks5://127.0.0.1:1080
-# - socks5://user:pass@host:port
-# - http://user:pass@host:port
+# 代理配置文件（按国家分类）
 #
-# 每行一个代理，程序会随机选择
-# 以 # 开头的行为注释
+# 格式：国家代码|代理URL
+# 国家代码使用手机号国际区号（去掉+号）
+#
+# 示例：
+# 972|socks5://il-proxy.example.com:1080    # 以色列
+# 55|socks5://br-proxy.example.com:1080     # 巴西
+# 86|socks5://cn-proxy.example.com:1080     # 中国
+# 1|socks5://us-proxy.example.com:1080      # 美国/加拿大
+#
+# 可以为同一个国家配置多个代理（会随机选择）
+# 如果没有匹配的国家代理，会使用全局代理（标记为global）
 
-# 示例（请替换为你的真实代理）
-# socks5://127.0.0.1:1080
-# http://127.0.0.1:7890
-# socks5://user:password@proxy.example.com:1080
+# 全局代理（备用，当找不到对应国家代理时使用）
+global|socks5://127.0.0.1:10808
+global|http://127.0.0.1:7890
+
+# 以色列 (+972)
+# 972|socks5://il-proxy1.example.com:1080
+# 972|socks5://il-proxy2.example.com:1080
+
+# 巴西 (+55)
+# 55|socks5://br-proxy.example.com:1080
+
+# 中国 (+86)
+# 86|socks5://cn-proxy.example.com:1080
+
+# 美国/加拿大 (+1)
+# 1|socks5://us-proxy.example.com:1080
+
+# 俄罗斯 (+7)
+# 7|socks5://ru-proxy.example.com:1080
+
+# 印度 (+91)
+# 91|socks5://in-proxy.example.com:1080
+
+# 英国 (+44)
+# 44|socks5://uk-proxy.example.com:1080
+
+# 德国 (+49)
+# 49|socks5://de-proxy.example.com:1080
+
+# 法国 (+33)
+# 33|socks5://fr-proxy.example.com:1080
+
+# 日本 (+81)
+# 81|socks5://jp-proxy.example.com:1080
+
+# 韩国 (+82)
+# 82|socks5://kr-proxy.example.com:1080
+
+# 新加坡 (+65)
+# 65|socks5://sg-proxy.example.com:1080
+
+# 澳大利亚 (+61)
+# 61|socks5://au-proxy.example.com:1080
+
+# 土耳其 (+90)
+# 90|socks5://tr-proxy.example.com:1080
+
+# 阿联酋 (+971)
+# 971|socks5://ae-proxy.example.com:1080

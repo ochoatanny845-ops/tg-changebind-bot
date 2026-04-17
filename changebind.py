@@ -40,8 +40,8 @@ class ChangeBinder:
             device_model = random.choice(DEVICE_MODELS)
             print(f'  设备: {device_model}')
             
-            # 获取随机代理
-            proxy = Config.get_random_proxy()
+            # 根据手机号国家选择代理
+            proxy = Config.get_proxy_for_phone(phone)
             
             # 创建客户端（模拟设备）
             client = TelegramClient(
@@ -53,7 +53,7 @@ class ChangeBinder:
                 app_version='9.5.2',
                 lang_code='zh',
                 system_lang_code='zh-CN',
-                proxy=proxy  # 添加代理
+                proxy=proxy  # 使用匹配国家的代理
             )
             
             await client.connect()
@@ -130,8 +130,8 @@ class ChangeBinder:
         print(f'  Session: {session_file}')
         
         try:
-            # 获取随机代理
-            proxy = Config.get_random_proxy()
+            # 根据新手机号国家选择代理
+            proxy = Config.get_proxy_for_phone(new_phone)
             
             # 1. 连接客户端
             print(f'\n[1/5] 连接账号...')
@@ -139,7 +139,7 @@ class ChangeBinder:
                 session_file,
                 Config.API_ID,
                 Config.API_HASH,
-                proxy=proxy  # 添加代理
+                proxy=proxy  # 使用匹配国家的代理
             )
             
             await client.connect()
