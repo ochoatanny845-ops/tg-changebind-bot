@@ -404,52 +404,114 @@ class ChangeBindBot:
         await update.message.reply_text(
             f'📦 批量登录模式\n\n'
             f'总数: {total} 个账号\n'
-            f'开始处理...'
+            f'开始处理...\n\n'
+            f'⏱️ 预计耗时: {total * 2}-{total * 3} 分钟'
         )
         
         success_count = 0
         failed_count = 0
-        results_text = ''
+        results = []
         
         for idx, (phone, api_url) in enumerate(accounts, 1):
             # 发送进度
-            if idx % 5 == 1 or idx == total:
-                await update.message.reply_text(f'⏳ 进度: {idx}/{total}')
+            progress_msg = await update.message.reply_text(
+                f'⏳ 进度: {idx}/{total}\n\n'
+                f'正在处理: {phone}\n'
+                f'设备连接中...'
+            )
             
             # 生成session文件名
             session_file = f'sessions/login_{phone.replace("+", "")}'
             os.makedirs('sessions', exist_ok=True)
             
-            # 执行登录
-            result = await self.binder.login_account(phone, api_url, session_file)
-            
-            if result['success']:
-                # 添加到数据库
-                account_id = self.db.add_account(
-                    phone,
-                    api_url,
-                    session_file,
-                    result['device_model']
-                )
+            try:
+                # 执行登录
+                result = await self.binder.login_account(phone, api_url, session_file)
                 
-                success_count += 1
-                results_text += f'✅ #{account_id} {phone}\n'
-            else:
+                if result['success']:
+                    # 添加到数据库
+                    account_id = self.db.add_account(
+                        phone,
+                        api_url,
+                        session_file,
+                        result['device_model']
+                    )
+                    
+                    success_count += 1
+                    results.append({
+                        'success': True,
+                        'id': account_id,
+                        'phone': phone,
+                        'device': result['device_model']
+                    })
+                    
+                    # 更新进度消息
+                    await progress_msg.edit_text(
+                        f'✅ 成功: {idx}/{total}\n\n'
+                        f'账号: {phone}\n'
+                        f'ID: #{account_id}\n'
+                        f'设备: {result["device_model"]}'
+                    )
+                else:
+                    failed_count += 1
+                    results.append({
+                        'success': False,
+                        'phone': phone,
+                        'error': result['error']
+                    })
+                    
+                    # 更新进度消息
+                    await progress_msg.edit_text(
+                        f'❌ 失败: {idx}/{total}\n\n'
+                        f'账号: {phone}\n'
+                        f'错误: {result["error"][:100]}'
+                    )
+                
+            except Exception as e:
                 failed_count += 1
-                results_text += f'❌ {phone} - {result["error"]}\n'
+                results.append({
+                    'success': False,
+                    'phone': phone,
+                    'error': str(e)
+                })
+                
+                # 更新进度消息
+                await progress_msg.edit_text(
+                    f'❌ 异常: {idx}/{total}\n\n'
+                    f'账号: {phone}\n'
+                    f'错误: {str(e)[:100]}'
+                )
         
         # 发送汇总
         ready_time = datetime.now() + timedelta(hours=24)
         
-        await update.message.reply_text(
+        summary_text = (
             f'📊 批量登录完成！\n\n'
-            f'成功: {success_count}\n'
-            f'失败: {failed_count}\n'
-            f'总计: {total}\n\n'
+            f'✅ 成功: {success_count}\n'
+            f'❌ 失败: {failed_count}\n'
+            f'📱 总计: {total}\n\n'
             f'⏰ 就绪时间: {ready_time.strftime("%m-%d %H:%M")}\n\n'
-            f'{results_text}\n'
-            f'使用 /status 查看详情'
         )
+        
+        # 添加成功账号列表
+        if success_count > 0:
+            summary_text += '✅ 成功账号：\n'
+            for r in results:
+                if r['success']:
+                    summary_text += f'#{r["id"]} {r["phone"]}\n'
+            summary_text += '\n'
+        
+        # 添加失败账号列表
+        if failed_count > 0:
+            summary_text += '❌ 失败账号：\n'
+            for r in results:
+                if not r['success']:
+                    error_short = r['error'][:30]
+                    summary_text += f'{r["phone"]} - {error_short}\n'
+        
+        summary_text += '\n使用 /status 查看详情'
+        
+        await update.message.reply_text(summary_text)
     
     async def handle_changebind_input(self, update: Update):
         """处理换绑输入"""
