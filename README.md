@@ -87,46 +87,40 @@ python bot.py
 /list    # 查看详细列表
 ```
 
-### 5. 配置代理（推荐 - 动态生成国家代理）
+### 5. 配置代理（推荐 - IPDeep 一次一换）
 
-**新格式（推荐）：代理模板**
+**IPDeep 代理配置（一次一换模式）**
 
 创建 `proxy.txt` 文件：
 
 ```
-# 格式：host:port:username_template:password
-# 使用 {country} 占位符，自动替换为国家代码
-# 使用 {session} 占位符，自动生成会话ID
+# 基础模式（一次一换，不限国家）
+gate.ipdeep.com:8082:d1561533000-res-session-{random}-sessiontime-0:Qqesi3rN
 
-gate.ipdeep.com:8082:d1561533000-res-country-{country}-session-{session}:Qqesi3rN
+# 国家限制模式（一次一换 + 自动匹配国家）
+gate.ipdeep.com:8082:d1561533000-res-country-{country}-session-{random}-sessiontime-0:Qqesi3rN
 ```
 
-**自动生成规则：**
-```
-登录 +972555509621 (以色列)
-→ 生成: gate.ipdeep.com:8082:d1561533000-res-country-il-session-1713368400000:Qqesi3rN
+**模板变量说明：**
+- `{random}` - 自动生成随机数（10000-9999999999）
+- `{country}` - 根据手机号自动替换国家代码（br/il/cn等）
+- `sessiontime-0` - IP时长为0（一次一换）
 
+**生成示例：**
+```
 登录 +55119107476 (巴西)
-→ 生成: gate.ipdeep.com:8082:d1561533000-res-country-br-session-1713368401000:Qqesi3rN
+→ gate.ipdeep.com:8082:d1561533000-res-country-br-session-8472635-sessiontime-0:Qqesi3rN
 
-登录 +8613800138000 (中国)
-→ 生成: gate.ipdeep.com:8082:d1561533000-res-country-cn-session-1713368402000:Qqesi3rN
+登录 +972555509621 (以色列)
+→ gate.ipdeep.com:8082:d1561533000-res-country-il-session-9138264-sessiontime-0:Qqesi3rN
+
+每次操作使用新的随机数 → 每次都是新IP（一次一换）
 ```
 
-**国家代码映射：**
-- +972 → il (以色列)
-- +55 → br (巴西)
-- +86 → cn (中国)
-- +1 → us (美国)
-- +7 → ru (俄罗斯)
-- +91 → in (印度)
-- [查看完整列表](country_codes.py)
-
-**优势：**
-- 🌍 **自动匹配手机号所属国家**
-- 🔄 **每次生成唯一会话ID**
-- 🎯 **符合地理位置一致性（降低风控）**
-- 📍 **无需为每个国家单独配置代理**
+**如需粘性IP（例如10分钟不变）：**
+```
+gate.ipdeep.com:8082:d1561533000-res-session-{random}-sessiontime-10:Qqesi3rN
+```
 
 
 

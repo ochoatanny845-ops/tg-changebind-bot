@@ -1,19 +1,17 @@
-# 代理配置文件（模板格式）
+# 代理配置文件（IPDeep 一次一换模式）
 #
 # 格式：host:port:username_template:password
 #
-# username_template 中使用 {country} 占位符，会自动替换为国家代码
+# 模板变量：
+# {random} - 随机数（10000-9999999999）
+# {country} - 国家代码（可选，如果不需要国家限制可以删除）
+# {session_time} - IP时长（0=一次一换，>0=粘性IP，单位：分钟）
 #
-# 示例：
-# gate.ipdeep.com:8082:d1561533000-res-country-{country}-session-{session}:Qqesi3rN
-#
-# 手机号 +55119107476 (巴西) → res-country-br
-# 手机号 +972555509621 (以色列) → res-country-il
-# 手机号 +8613800138000 (中国) → res-country-cn
+# IPDeep 代理（一次一换）
+gate.ipdeep.com:8082:d1561533000-res-session-{random}-sessiontime-0:Qqesi3rN
 
-# IPDeep 代理（支持多国家）
-gate.ipdeep.com:8082:d1561533000-res-country-{country}-session-{session}:Qqesi3rN
+# 如果需要指定国家（一次一换 + 国家限制）
+# gate.ipdeep.com:8082:d1561533000-res-country-{country}-session-{random}-sessiontime-0:Qqesi3rN
 
-# 可以配置多个模板（会随机选择）
-# gate.ipdeep.com:8082:d1561533000-res-country-{country}-session-{session}:Qqesi3rN
-# other-proxy.com:1080:user-{country}-session-{session}:pass123
+# 如果需要粘性IP（例如10分钟不变）
+# gate.ipdeep.com:8082:d1561533000-res-session-{random}-sessiontime-10:Qqesi3rN

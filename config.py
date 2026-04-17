@@ -69,7 +69,8 @@ class Config:
         
         if not country_iso:
             print(f'  ⚠️ 未找到国家代码 +{phone_country_code} 的映射')
-            return None
+            # 没有国家映射时，仍然继续（使用不带国家的代理）
+            country_iso = 'xx'
         
         print(f'  🌍 手机号: +{phone_country_code} → 国家: {country_iso.upper()}')
         
@@ -84,11 +85,18 @@ class Config:
         # 随机选择一个代理模板
         proxy_template = random.choice(lines)
         
+        # 生成随机数（10000-9999999999）
+        random_num = random.randint(10000, 9999999999)
+        
         # 生成会话ID（时间戳）
         session_id = int(time.time() * 1000)
         
         # 替换模板变量
-        proxy_string = proxy_template.replace('{country}', country_iso).replace('{session}', str(session_id))
+        proxy_string = (proxy_template
+                       .replace('{country}', country_iso)
+                       .replace('{session}', str(session_id))
+                       .replace('{random}', str(random_num))
+                       .replace('{session_time}', '0'))  # 一次一换
         
         print(f'  🔒 生成代理: {proxy_string}')
         
